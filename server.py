@@ -1,5 +1,9 @@
 import paho.mqtt.client as mqtt
 import os
+import atexit
+import energenie
+
+energenie.init()
 
 
 # The callback for when the client receives a CONNACK response from the server.
@@ -8,12 +12,23 @@ def on_connect(client, userdata, flags, rc):
 
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
-    client.subscribe("$SYS/#")
+    client.subscribe("home/energenie/*/*")
 
 
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
-    print(msg.topic + " " + str(msg.payload))
+    path = str.split(msg.topic)
+    house_code = path[2]
+    switch_idx = path[3]
+
+    switch = energenie.Devices.ENER002((house_code, switch_idx))
+
+    if msg.payload == 'ON':
+        switch.turn_on()
+    else:
+        switch.turn_off()
+
+    print(msg.topic + " - " + str(msg.payload))
 
 
 client = mqtt.Client()
@@ -30,3 +45,14 @@ client.connect("localhost", 1883, 60)
 # Other loop*() functions are available that give a threaded interface and a
 # manual interface.
 client.loop_forever()
+
+
+def onexit():
+    print("Shutting down...")
+    client.loop_stop()
+    client.disconnect()
+    energenie.finished()
+    print("...done.")
+
+
+atexit.register(onexit)
