@@ -8,9 +8,13 @@ energenie.init()
 
 
 class Trv(MIHO013):
+    def __init__(self, mqtt_client, device_id, air_interface=None):
+        self.mqtt_client = mqtt_client
+        MIHO013.__init__(self, device_id, air_interface)
+
     def handle_message(self, payload):
         result = super(Trv, self).handle_message(payload)
-        print("Something extra")
+        self.mqtt_client.publish("home/spare_room/trv", "{'temperature': " + self.get_ambient_temperature() + ", 'voltage': " + self.get_battery_voltage() + "}")
         return result
 
 
@@ -20,7 +24,7 @@ def on_connect(client, userdata, flags, rc):
 
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
-    client.subscribe("home/#")
+    client.subscribe("home/energenie/#")
 
 
 # The callback for when a PUBLISH message is received from the server.
@@ -54,7 +58,7 @@ client.connect("localhost", 1883, 60)
 
 # spare_room_rad
 valve = Trv(8220)
-
+energenie.fsk_router.add((4, 3, 8220), valve)
 
 def onexit():
     print("Shutting down...")
