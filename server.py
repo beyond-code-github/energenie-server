@@ -98,4 +98,5 @@ atexit.register(onexit)
 # Other loop*() functions are available that give a threaded interface and a
 # manual interface.
 while True:
+    print('.', end='', flush=True)
     energenie.loop()
