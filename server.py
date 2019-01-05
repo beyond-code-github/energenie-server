@@ -47,7 +47,7 @@ def handle_energenie(path, payload):
 
 def handle_trv(path, payload):
     print("Setting trv to " + payload)
-    target_temp = int(payload)
+    target_temp = int(float(payload))
     valve.set_setpoint_temperature(target_temp)
 
 
