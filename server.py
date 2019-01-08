@@ -78,7 +78,7 @@ token = os.environ['MQTT_TOKEN']
 client.username_pw_set("homeassistant", token)
 
 client.connect("localhost", 1883, 60)
-client.loop_start()
+client.loop_forever()
 
 # spare_room_rad
 valve = Trv(client, 8220)
