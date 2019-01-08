@@ -4,7 +4,7 @@ import atexit
 import energenie
 from energenie.Devices import MIHO013
 
-energenie.init()
+from energenie_client import EnergenieClient
 
 
 class Trv(MIHO013):
@@ -68,7 +68,9 @@ def on_message(client, userdata, msg):
     handlers[discriminator](path, payload)
 
 
-client = mqtt.Client()
+energenie.init()
+
+client = EnergenieClient()
 client.on_connect = on_connect
 client.on_message = on_message
 
@@ -92,11 +94,3 @@ def onexit():
 
 
 atexit.register(onexit)
-
-# Blocking call that processes network traffic, dispatches callbacks and
-# handles reconnecting.
-# Other loop*() functions are available that give a threaded interface and a
-# manual interface.
-while True:
-    print('.', end='', flush=True)
-    energenie.loop()
