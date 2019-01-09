@@ -8,13 +8,14 @@ from energenie_client import EnergenieClient
 
 
 class Trv(MIHO013):
-    def __init__(self, mqtt_client, device_id, air_interface=None):
+    def __init__(self, name, mqtt_client, device_id, air_interface=None):
+        self.name = name
         self.mqtt_client = mqtt_client
         MIHO013.__init__(self, device_id, air_interface)
 
     def handle_message(self, payload):
         result = super(Trv, self).handle_message(payload)
-        self.mqtt_client.publish("home/spare_room/trv",
+        self.mqtt_client.publish("home/" + self.name + "/trv",
                                  "{\"temperature\": " + str(self.get_ambient_temperature())
                                  + ", \"voltage\": " + str(self.get_battery_voltage() or "null") + "}")
         return result
@@ -27,7 +28,7 @@ def on_connect(c, userdata, flags, rc):
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     c.subscribe("home/energenie/#")
-    c.subscribe("home/spare_room/trv/set")
+    c.subscribe("home/#/trv/set")
 
 
 def handle_energenie(path, payload):
@@ -45,15 +46,30 @@ def handle_energenie(path, payload):
         switch.turn_off()
 
 
-def handle_trv(path, payload):
-    print("Setting trv to " + payload)
-    target_temp = int(float(payload))
-    valve.set_setpoint_temperature(target_temp)
+def create_handler(trv):
+    def handle_trv(payload):
+        print("Setting " + trv.name + " to " + payload)
+        target_temp = int(float(payload))
+        trv.set_setpoint_temperature(target_temp)
 
+    return handle_trv
+
+
+energenie.init()
+client = EnergenieClient()
+
+# spare_room_rad
+spare_room_valve = Trv("spare_room", client, 8220)
+energenie.fsk_router.add((4, 3, 8220), spare_room_valve)
+
+# nursery_rad
+nursery_valve = Trv("nursery", client, 7746)
+energenie.fsk_router.add((4, 3, 7746), nursery_valve)
 
 handlers = {
     "energenie": handle_energenie,
-    "spare_room": handle_trv
+    "spare_room": create_handler(spare_room_valve),
+    "nursery": create_handler(nursery_valve),
 }
 
 
@@ -68,19 +84,12 @@ def on_message(client, userdata, msg):
     handlers[discriminator](path, payload)
 
 
-energenie.init()
-
-client = EnergenieClient()
 client.on_connect = on_connect
 client.on_message = on_message
 
 token = os.environ['MQTT_TOKEN']
 client.username_pw_set("homeassistant", token)
 client.connect("localhost", 1883, 60)
-
-# spare_room_rad
-valve = Trv(client, 8220)
-energenie.fsk_router.add((4, 3, 8220), valve)
 
 
 def onexit():
