@@ -28,7 +28,7 @@ def on_connect(c, userdata, flags, rc):
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     c.subscribe("home/energenie/#")
-    c.subscribe("home/#/trv/set")
+    c.subscribe("home/+/trv/set")
 
 
 def handle_energenie(path, payload):
@@ -81,7 +81,7 @@ def on_message(client, userdata, msg):
     path = str.split(msg.topic, "/")
     discriminator = path[1]
 
-    handlers[discriminator](path, payload)
+    handlers[discriminator](payload)
 
 
 client.on_connect = on_connect

@@ -1,2 +1,2 @@
 paho-mqtt
-https://github.com/beyond-code-github/pyenergenie/archive/master.zip#pyenergenie==0.1.6
+https://github.com/beyond-code-github/pyenergenie/archive/master.zip#pyenergenie==0.3.0
