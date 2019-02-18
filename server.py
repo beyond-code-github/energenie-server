@@ -28,10 +28,14 @@ def on_connect(c, userdata, flags, rc):
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     c.subscribe("home/energenie/#")
-    c.subscribe("home/+/trv/set")
+    c.subscribe("home/spare_room/trv/set")
+    c.subscribe("home/nursery/trv/set")
+    c.subscribe("home/living_room_1/trv/set")
+    c.subscribe("home/living_room_2/trv/set")
 
 
-def handle_energenie(path, payload):
+def handle_energenie(payload, path):
+    print("Energenie handler")
     house_code = int(path[2], 16)
     switch_idx = int(path[3])
 
@@ -47,7 +51,7 @@ def handle_energenie(path, payload):
 
 
 def create_handler(trv):
-    def handle_trv(payload):
+    def handle_trv(payload, path):
         print("Setting " + trv.name + " to " + payload)
         target_temp = int(float(payload))
         trv.set_setpoint_temperature(target_temp)
@@ -66,10 +70,18 @@ energenie.fsk_router.add((4, 3, 8220), spare_room_valve)
 nursery_valve = Trv("nursery", client, 7746)
 energenie.fsk_router.add((4, 3, 7746), nursery_valve)
 
+living_room_1_valve = Trv("living_room_1", client, 8614)
+energenie.fsk_router.add((4, 3, 8614), living_room_1_valve)
+
+living_room_2_valve = Trv("living_room_2", client, 7694)
+energenie.fsk_router.add((4, 3, 7694), living_room_2_valve)
+
 handlers = {
     "energenie": handle_energenie,
     "spare_room": create_handler(spare_room_valve),
     "nursery": create_handler(nursery_valve),
+    "living_room_1": create_handler(living_room_1_valve),
+    "living_room_2": create_handler(living_room_2_valve),
 }
 
 
@@ -81,7 +93,7 @@ def on_message(client, userdata, msg):
     path = str.split(msg.topic, "/")
     discriminator = path[1]
 
-    handlers[discriminator](payload)
+    handlers[discriminator](payload, path)
 
 
 client.on_connect = on_connect
