@@ -38,6 +38,8 @@ def fetch_mihome_data():
     for trv in all_trvs:
         trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
 
+    update_call_for_heat()
+
 
 class Trv(MIHO013):
     def __init__(self, name, mqtt_client, device_id, mihome_id, air_interface=None):
@@ -118,6 +120,8 @@ def handle_nest(payload, path):
     global nest_temperature
     nest_temperature = payload
     logger.info("Nest reports temperature at " + nest_temperature)
+
+    update_call_for_heat()
 
 
 def create_handler(trv):
