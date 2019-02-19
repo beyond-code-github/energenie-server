@@ -123,13 +123,15 @@ def create_handler(trv):
         target_temp = float(payload)
 
         mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/set_target_temperature"
+        json_data = "{\"id\":" + trv.mihome_id + ", \"temperature\": " + str(target_temp) + "}"
+
         response = requests.post(
             mihome_url,
-            data="params:{\"id\":" + trv.mihome_id + ", \"temperature\": " + str(target_temp) + "}",
+            data={"params": json_data},
             auth=HTTPBasicAuth(mihome_user, mihome_token))
 
         logger.debug("Mihome response: " + response.status_code)
-        logger.debug(response.raw)
+        logger.debug(response.text)
 
     return handle_trv
 
