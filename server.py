@@ -39,7 +39,7 @@ class Trv(MIHO013):
 def fetch_mihome_data():
     mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/list"
     response = requests.get(mihome_url, auth=HTTPBasicAuth(mihome_user, mihome_token))
-    json_data = response.json
+    json_data = response.json()
 
     global mihome_data
     mihome_data = json_data["data"]
