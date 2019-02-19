@@ -35,7 +35,6 @@ class EnergenieClient(Client):
             while rc == MQTT_ERR_SUCCESS:
                 self.loop_fn()
                 rc = self.loop(timeout, max_packets)
-                print('*', end='', flush=True)
 
                 if (self._thread_terminate is True
                         and self._current_out_packet is None

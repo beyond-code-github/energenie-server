@@ -3,6 +3,7 @@ import os
 import atexit
 import energenie
 import requests
+import schedule
 from energenie.Devices import MIHO013
 from requests.auth import HTTPBasicAuth
 
@@ -17,13 +18,16 @@ mihome_token = os.environ['MIHOME_TOKEN']
 
 
 def fetch_mihome_data():
+    print("Fetching data from mihome gateway")
     mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/list"
     response = requests.get(mihome_url, auth=HTTPBasicAuth(mihome_user, mihome_token))
     json_data = response.json()
 
     global mihome_data
     mihome_data = json_data["data"]
-    print(mihome_data)
+
+    for trv in all_trvs:
+        trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
 
 
 class Trv(MIHO013):
@@ -36,6 +40,9 @@ class Trv(MIHO013):
         self.voltageReadingPeriod = None
         self.diagnosticsReadingPeriod = None
 
+    def description(self):
+        return self.name + " (" + str(self.get_ambient_temperature() or 99) + "/" + str(self.get_target_temperature()) + ")"
+
     def get_target_temperature(self):
         global mihome_data
         my_data = next(d for d in mihome_data if d["id"] == self.mihome_id)
@@ -43,9 +50,7 @@ class Trv(MIHO013):
 
     def handle_message(self, payload):
         result = super(Trv, self).handle_message(payload)
-        self.mqtt_client.publish("home/" + self.name + "/trv/current",
-                                 "{\"temperature\": " + str(self.get_ambient_temperature())
-                                 + ", \"voltage\": " + str(self.get_battery_voltage() or "null") + "}", retain=True)
+        self.mqtt_client.publish("home/" + self.name + "/trv", str(self.get_ambient_temperature()))
 
         update_call_for_heat()
 
@@ -59,10 +64,9 @@ def update_call_for_heat():
     state = 'off'
     if len(trvs_calling_for_heat) > 0:
         state = 'on'
-        print("TRVs calling for heat: " + str([
-            trv.name + " (" + str(trv.get_target_temperature()) + ")" for trv in trvs_calling_for_heat]))
+        print("TRVs calling for heat: " + str([trv.description() for trv in trvs_calling_for_heat]))
     else:
-        print("No TRVs calling for heat")
+        print("No TRVs calling for heat: " + str([trv.description() for trv in all_trvs]))
 
     #self.mqtt_client.publish("home/nest/call_for_heat", state)
 
@@ -75,6 +79,7 @@ def on_connect(c, userdata, flags, rc):
     # reconnect then subscriptions will be renewed.
     c.subscribe("home/energenie/#")
     c.subscribe("home/nest/temperature")
+
     c.subscribe("home/spare_room/trv/set")
     c.subscribe("home/nursery/trv/set")
     c.subscribe("home/living_room_1/trv/set")
@@ -149,6 +154,7 @@ def on_message(client, userdata, msg):
     handlers[discriminator](payload, path)
 
 
+schedule.every(1).minutes.do(fetch_mihome_data)
 fetch_mihome_data()
 
 client.on_connect = on_connect
@@ -166,9 +172,11 @@ def onexit():
     energenie.finished()
     print("...done.")
 
+
 def on_loop():
     energenie.loop()
-    print('.', end='', flush=True)
+    schedule.run_pending()
+
 
 atexit.register(onexit)
 
