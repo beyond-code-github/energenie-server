@@ -120,8 +120,13 @@ def handle_nest(payload, path):
 def create_handler(trv):
     def handle_trv(payload, path):
         logger.info("Setting " + trv.name + " to " + payload)
-        target_temp = int(float(payload))
-        # trv.set_setpoint_temperature(target_temp)
+        target_temp = float(payload)
+
+        mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/set_target_temperature"
+        response = requests.post(
+            mihome_url, data="params:{\"id\":" + trv.mihome_id + ", \"temperature\": " + str(target_temp) + "}")
+
+        logger.debug(response.raw)
 
     return handle_trv
 
