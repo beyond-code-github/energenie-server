@@ -1,6 +1,8 @@
 import json
 import os
 import atexit
+from functools import reduce
+
 import energenie
 import requests
 import schedule
@@ -51,6 +53,8 @@ class Trv(MIHO013):
         self.voltageReadingPeriod = None
         self.diagnosticsReadingPeriod = None
 
+        energenie.fsk_router.add((4, 3, device_id), self)
+
     def description(self):
         return self.name + " (" + str(self.get_ambient_temperature() or 99) + "/" + str(self.get_target_temperature()) + ")"
 
@@ -93,10 +97,8 @@ def on_connect(c, userdata, flags, rc):
     c.subscribe("home/energenie/#")
     c.subscribe("home/nest/temperature")
 
-    c.subscribe("home/spare_room/trv/set")
-    c.subscribe("home/nursery/trv/set")
-    c.subscribe("home/living_room_1/trv/set")
-    c.subscribe("home/living_room_2/trv/set")
+    for trv in all_trvs:
+        c.subscribe("home/" + trv.name + "/trv/set")
 
     c.publish("constants/auto", "Auto", retain=True)
 
@@ -149,27 +151,16 @@ energenie.init()
 client = EnergenieClient()
 
 spare_room_valve = Trv("spare_room", client, 8220, 183451)
-energenie.fsk_router.add((4, 3, 8220), spare_room_valve)
-
 nursery_valve = Trv("nursery", client, 7746, 183449)
-energenie.fsk_router.add((4, 3, 7746), nursery_valve)
-
 living_room_1_valve = Trv("living_room_1", client, 8614, 190208)
-energenie.fsk_router.add((4, 3, 8614), living_room_1_valve)
-
 living_room_2_valve = Trv("living_room_2", client, 7694, 190226)
-energenie.fsk_router.add((4, 3, 7694), living_room_2_valve)
+bathroom_valve = Trv("bathroom", client, 7809536, 190529)
 
-all_trvs = [spare_room_valve, nursery_valve, living_room_1_valve, living_room_2_valve]
+all_trvs = [spare_room_valve, nursery_valve, living_room_1_valve, living_room_2_valve, bathroom_valve]
 
-handlers = {
-    "energenie": handle_energenie,
-    "nest": handle_nest,
-    "spare_room": create_handler(spare_room_valve),
-    "nursery": create_handler(nursery_valve),
-    "living_room_1": create_handler(living_room_1_valve),
-    "living_room_2": create_handler(living_room_2_valve),
-}
+handlers = reduce(
+    lambda obj, item: dict(obj.items() + { item.name : create_handler(item) }.items()),
+    all_trvs, {"energenie": handle_energenie, "nest": handle_nest})
 
 
 # The callback for when a PUBLISH message is received from the server.
