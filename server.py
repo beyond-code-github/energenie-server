@@ -60,6 +60,7 @@ class Trv(MIHO013):
     def handle_message(self, payload):
         result = super(Trv, self).handle_message(payload)
         self.mqtt_client.publish("home/" + self.name + "/trv/current", str(self.get_ambient_temperature()))
+        logger.info(self.name + " reports temperature " + str(self.get_ambient_temperature()))
 
         update_call_for_heat()
 
