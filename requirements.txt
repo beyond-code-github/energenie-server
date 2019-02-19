@@ -1,2 +1,3 @@
+requests
 paho-mqtt
 https://github.com/beyond-code-github/pyenergenie/archive/master.zip#pyenergenie==0.3.0

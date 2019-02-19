@@ -1,21 +1,29 @@
-import paho.mqtt.client as mqtt
+import json
 import os
 import atexit
 import energenie
+import requests
 from energenie.Devices import MIHO013
+from requests.auth import HTTPBasicAuth
 
 from energenie_client import EnergenieClient
 
 
 nest_temperature = None
+mihome_data = None
 
+mihome_user = os.environ['MIHOME_USER']
+mihome_token = os.environ['MIHOME_TOKEN']
 
 
 class Trv(MIHO013):
     def __init__(self, name, mqtt_client, device_id, air_interface=None):
         self.name = name
         self.mqtt_client = mqtt_client
+
         MIHO013.__init__(self, device_id, air_interface)
+        self.voltageReadingPeriod = None
+        self.diagnosticsReadingPeriod = None
 
     def handle_message(self, payload):
         result = super(Trv, self).handle_message(payload)
@@ -23,9 +31,19 @@ class Trv(MIHO013):
                                  "{\"temperature\": " + str(self.get_ambient_temperature())
                                  + ", \"voltage\": " + str(self.get_battery_voltage() or "null") + "}")
 
-        update_call_for_heat();
+        update_call_for_heat()
 
         return result
+
+
+def fetch_mihome_data():
+    mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/list"
+    response = requests.get(mihome_url, auth=HTTPBasicAuth(mihome_user, mihome_token))
+    json_data = response.json
+
+    global mihome_data
+    mihome_data = json_data["data"]
+    print(mihome_data)
 
 
 def update_call_for_heat():
@@ -121,6 +139,8 @@ def on_message(client, userdata, msg):
 
     handlers[discriminator](payload, path)
 
+
+fetch_mihome_data()
 
 client.on_connect = on_connect
 client.on_message = on_message
