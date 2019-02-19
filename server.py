@@ -8,6 +8,15 @@ from energenie.Devices import MIHO013
 from requests.auth import HTTPBasicAuth
 
 from energenie_client import EnergenieClient
+import logging
+
+# create logger
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+logger = logging.getLogger("energenie.server")
+logger.setLevel(logging.INFO)
+logger.addHandler(ch)
 
 
 nest_temperature = None
@@ -18,7 +27,7 @@ mihome_token = os.environ['MIHOME_TOKEN']
 
 
 def fetch_mihome_data():
-    print("Fetching data from mihome gateway")
+    logger.info("Fetching data from mihome gateway")
     mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/list"
     response = requests.get(mihome_url, auth=HTTPBasicAuth(mihome_user, mihome_token))
     json_data = response.json()
@@ -64,16 +73,16 @@ def update_call_for_heat():
     state = 'off'
     if len(trvs_calling_for_heat) > 0:
         state = 'on'
-        print("TRVs calling for heat: " + str([trv.description() for trv in trvs_calling_for_heat]))
+        logger.info("TRVs calling for heat: " + str([trv.description() for trv in trvs_calling_for_heat]))
     else:
-        print("No TRVs calling for heat: " + str([trv.description() for trv in all_trvs]))
+        logger.info("No TRVs calling for heat: " + str([trv.description() for trv in all_trvs]))
 
     #self.mqtt_client.publish("home/nest/call_for_heat", state)
 
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(c, userdata, flags, rc):
-    print("Connected with result code " + str(rc))
+    logger.info("Connected with result code " + str(rc))
 
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
@@ -91,25 +100,25 @@ def handle_energenie(payload, path):
     switch_idx = int(path[3])
 
     switch = energenie.Devices.ENER002((house_code, switch_idx))
-    print("house_code: " + str(house_code) + " idx: " + str(switch_idx))
+    logger.info("house_code: " + str(house_code) + " idx: " + str(switch_idx))
 
     if payload == "ON":
-        print("Turning switch on")
+        logger.info("Turning switch on")
         switch.turn_on()
     else:
-        print("Turning switch off")
+        logger.info("Turning switch off")
         switch.turn_off()
 
 
 def handle_nest(payload, path):
     global nest_temperature
     nest_temperature = payload
-    print("Nest reports temperature at " + nest_temperature)
+    logger.info("Nest reports temperature at " + nest_temperature)
 
 
 def create_handler(trv):
     def handle_trv(payload, path):
-        print("Setting " + trv.name + " to " + payload)
+        logger.info("Setting " + trv.name + " to " + payload)
         target_temp = int(float(payload))
         # trv.set_setpoint_temperature(target_temp)
 
@@ -146,7 +155,7 @@ handlers = {
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
     payload = msg.payload.decode("utf-8")
-    print(msg.topic + " - " + payload)
+    logger.debug(msg.topic + " - " + payload)
 
     path = str.split(msg.topic, "/")
     discriminator = path[1]
@@ -166,11 +175,11 @@ client.connect("localhost", 1883, 60)
 
 
 def onexit():
-    print("Shutting down...")
+    logger.info("Shutting down...")
     client.loop_stop()
     client.disconnect()
     energenie.finished()
-    print("...done.")
+    logger.info("...done.")
 
 
 def on_loop():
