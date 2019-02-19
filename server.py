@@ -7,6 +7,10 @@ from energenie.Devices import MIHO013
 from energenie_client import EnergenieClient
 
 
+nest_temperature = None
+
+
+
 class Trv(MIHO013):
     def __init__(self, name, mqtt_client, device_id, air_interface=None):
         self.name = name
@@ -18,7 +22,22 @@ class Trv(MIHO013):
         self.mqtt_client.publish("home/" + self.name + "/trv",
                                  "{\"temperature\": " + str(self.get_ambient_temperature())
                                  + ", \"voltage\": " + str(self.get_battery_voltage() or "null") + "}")
+
+        update_call_for_heat();
+
         return result
+
+
+def update_call_for_heat():
+    trvs_calling_for_heat = [trv for trv in all_trvs if (trv.get_ambient_temperature() or 99) < 20]
+    state = 'off'
+    if len(trvs_calling_for_heat) > 0:
+        state = 'on'
+        print("TRVs calling for heat: " + str([trv.name for trv in trvs_calling_for_heat]))
+    else:
+        print("No TRVs calling for heat")
+
+    #self.mqtt_client.publish("home/nest/call_for_heat", state)
 
 
 # The callback for when the client receives a CONNACK response from the server.
@@ -28,6 +47,7 @@ def on_connect(c, userdata, flags, rc):
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     c.subscribe("home/energenie/#")
+    c.subscribe("home/nest/temperature")
     c.subscribe("home/spare_room/trv/set")
     c.subscribe("home/nursery/trv/set")
     c.subscribe("home/living_room_1/trv/set")
@@ -35,7 +55,6 @@ def on_connect(c, userdata, flags, rc):
 
 
 def handle_energenie(payload, path):
-    print("Energenie handler")
     house_code = int(path[2], 16)
     switch_idx = int(path[3])
 
@@ -50,6 +69,12 @@ def handle_energenie(payload, path):
         switch.turn_off()
 
 
+def handle_nest(payload, path):
+    global nest_temperature
+    nest_temperature = payload
+    print("Nest reports temperature at " + nest_temperature)
+
+
 def create_handler(trv):
     def handle_trv(payload, path):
         print("Setting " + trv.name + " to " + payload)
@@ -62,11 +87,9 @@ def create_handler(trv):
 energenie.init()
 client = EnergenieClient()
 
-# spare_room_rad
 spare_room_valve = Trv("spare_room", client, 8220)
 energenie.fsk_router.add((4, 3, 8220), spare_room_valve)
 
-# nursery_rad
 nursery_valve = Trv("nursery", client, 7746)
 energenie.fsk_router.add((4, 3, 7746), nursery_valve)
 
@@ -76,8 +99,11 @@ energenie.fsk_router.add((4, 3, 8614), living_room_1_valve)
 living_room_2_valve = Trv("living_room_2", client, 7694)
 energenie.fsk_router.add((4, 3, 7694), living_room_2_valve)
 
+all_trvs = [spare_room_valve, nursery_valve, living_room_1_valve, living_room_2_valve]
+
 handlers = {
     "energenie": handle_energenie,
+    "nest": handle_nest,
     "spare_room": create_handler(spare_room_valve),
     "nursery": create_handler(nursery_valve),
     "living_room_1": create_handler(living_room_1_valve),
