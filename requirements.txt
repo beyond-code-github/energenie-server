@@ -1,4 +1,4 @@
 requests
 schedule
 paho-mqtt
-https://github.com/beyond-code-github/pyenergenie/archive/master.zip#pyenergenie==0.4444.0
+https://github.com/beyond-code-github/pyenergenie/archive/master.zip#pyenergenie==0.4.0
