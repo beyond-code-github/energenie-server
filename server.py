@@ -120,10 +120,10 @@ def handle_nest(payload, path):
 def create_handler(trv):
     def handle_trv(payload, path):
         logger.info("Setting " + trv.name + " to " + payload)
-        target_temp = float(payload)
 
         mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/set_target_temperature"
-        json_data = "{\"id\":" + trv.mihome_id + ", \"temperature\": " + str(target_temp) + "}"
+        json_data = "{\"id\":" + str(trv.mihome_id) + ", \"temperature\": " + payload + "}"
+        logger.debug(json_data)
 
         response = requests.post(
             mihome_url,
@@ -132,6 +132,8 @@ def create_handler(trv):
 
         logger.debug("Mihome response: " + response.status_code)
         logger.debug(response.text)
+
+        fetch_mihome_data()
 
     return handle_trv
 
@@ -174,7 +176,7 @@ def on_message(client, userdata, msg):
     handlers[discriminator](payload, path)
 
 
-schedule.every(1).minutes.do(fetch_mihome_data)
+schedule.every(30).seconds.do(fetch_mihome_data)
 fetch_mihome_data()
 
 client.on_connect = on_connect
