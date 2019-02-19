@@ -78,7 +78,8 @@ def update_call_for_heat():
     else:
         logger.info("No TRVs calling for heat: " + str([trv.description() for trv in all_trvs]))
 
-    #self.mqtt_client.publish("home/nest/call_for_heat", state)
+    global client
+    client.publish("home/nest/call_for_heat", state)
 
 
 # The callback for when the client receives a CONNACK response from the server.
@@ -94,6 +95,8 @@ def on_connect(c, userdata, flags, rc):
     c.subscribe("home/nursery/trv/set")
     c.subscribe("home/living_room_1/trv/set")
     c.subscribe("home/living_room_2/trv/set")
+
+    c.publish("constants/auto", "Auto", retain=True)
 
 
 def handle_energenie(payload, path):
