@@ -111,7 +111,7 @@ def create_handler(trv):
     def handle_trv(payload, path):
         print("Setting " + trv.name + " to " + payload)
         target_temp = int(float(payload))
-        trv.set_setpoint_temperature(target_temp)
+        # trv.set_setpoint_temperature(target_temp)
 
     return handle_trv
 
