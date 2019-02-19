@@ -7,6 +7,10 @@ class EnergenieClient(Client):
     def __init__(self, client_id="", clean_session=True, userdata=None,
                  protocol=MQTTv311, transport="tcp"):
         Client.__init__(self, client_id, clean_session, userdata, protocol, transport)
+        self.loop_fn = lambda *args: None
+
+    def on_loop(self, fn):
+        self.loop_fn = fn
 
     def loop_forever(self, timeout=1.0, max_packets=1, retry_first_connection=False):
         run = True
@@ -29,8 +33,7 @@ class EnergenieClient(Client):
         while run:
             rc = MQTT_ERR_SUCCESS
             while rc == MQTT_ERR_SUCCESS:
-                energenie.loop()
-                print('.', end='', flush=True)
+                self.loop_fn()
                 rc = self.loop(timeout, max_packets)
                 print('*', end='', flush=True)
 
