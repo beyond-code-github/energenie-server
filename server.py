@@ -39,9 +39,10 @@ def fetch_mihome_data():
     mihome_data = json_data["data"]
 
     for trv in all_trvs:
-        mihome_reference[trv.name] = mihome_reference.get(trv.name, trv.get_target_temperature())
+        mihome_reference[trv.name] = mihome_reference.get(trv.name, trv.get_mihome_temperature())
 
-        if mihome_reference[trv.name] != trv.get_target_temperature():
+        if mihome_reference[trv.name] != trv.get_mihome_temperature():
+            mihome_reference[trv.name] = trv.get_mihome_temperature()
             logger.info("Target temperature for " + trv.name + " has changed to " + str(trv.get_target_temperature()))
 
         trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
@@ -65,10 +66,21 @@ class Trv(MIHO013):
     def description(self):
         return self.name + " (" + str(self.get_ambient_temperature() or 99) + "/" + str(self.get_target_temperature()) + ")"
 
-    def get_target_temperature(self):
+    def get_mihome_temperature(self):
         global mihome_data
         my_data = next(d for d in mihome_data if d["id"] == self.mihome_id)
         return float(my_data["target_temperature"]) + self.target_offset
+
+    def get_target_temperature(self):
+        global mihome_reference
+        return mihome_reference[self.name]
+
+    def is_calling_for_heat(self):
+        return (self.get_ambient_temperature() or 99) < self.get_target_temperature()
+
+    def publish_state(self):
+        state = "Heat" if self.is_calling_for_heat() else "Off"
+        self.mqtt_client.publish("home/" + self.name + "/trv/state", state, retain=True)
 
     def handle_message(self, payload):
         result = super(Trv, self).handle_message(payload)
@@ -81,8 +93,7 @@ class Trv(MIHO013):
 
 
 def update_call_for_heat():
-    trvs_calling_for_heat = [
-        trv for trv in all_trvs if (trv.get_ambient_temperature() or 99) < trv.get_target_temperature()]
+    trvs_calling_for_heat = [trv for trv in all_trvs if trv.is_calling_for_heat()]
 
     state = 'off'
     if len(trvs_calling_for_heat) > 0:
@@ -90,6 +101,9 @@ def update_call_for_heat():
         logger.info("TRVs calling for heat: " + str([trv.description() for trv in trvs_calling_for_heat]))
     else:
         logger.info("No TRVs calling for heat: " + str([trv.description() for trv in all_trvs]))
+
+    for trv in all_trvs:
+        trv.publish_state()
 
     global client
     client.publish("home/nest/call_for_heat", state)
@@ -133,16 +147,12 @@ def handle_nest(payload, path):
     update_call_for_heat()
 
 
-def create_handler(trv):
-    def handle_trv(payload, path):
-        global mihome_reference
+def set_trv_temperature(trv, temperature):
+    mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/set_target_temperature"
+    json_data = "{\"id\":" + str(trv.mihome_id) + ", \"temperature\": " + str(temperature) + "}"
+    logger.debug(json_data)
 
-        logger.info("Setting " + trv.name + " to " + payload)
-
-        mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/set_target_temperature"
-        json_data = "{\"id\":" + str(trv.mihome_id) + ", \"temperature\": " + payload + "}"
-        logger.debug(json_data)
-
+    try:
         response = requests.post(
             mihome_url,
             data={"params": json_data},
@@ -150,8 +160,14 @@ def create_handler(trv):
 
         logger.debug("Mihome response: " + response.status_code)
         logger.debug(response.text)
+    except Exception as e:
+        logger.error("Error setting trv temperature: " + str(e))
 
-        mihome_reference[trv.name] = payload
+
+def create_handler(trv):
+    def handle_trv(payload, path):
+        logger.info("Handling set " + trv.name + " to " + payload)
+        set_trv_temperature(trv, payload)
         fetch_mihome_data()
 
     return handle_trv
