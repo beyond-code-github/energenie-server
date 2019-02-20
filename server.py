@@ -42,7 +42,7 @@ def fetch_mihome_data():
         mihome_reference[trv.name] = mihome_reference.get(trv.name, trv.get_target_temperature())
 
         if mihome_reference[trv.name] != trv.get_target_temperature():
-            logger.info("Target temperature for " + trv.name + " has changed to " + trv.get_target_temperature())
+            logger.info("Target temperature for " + trv.name + " has changed to " + str(trv.get_target_temperature()))
 
         trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
 
