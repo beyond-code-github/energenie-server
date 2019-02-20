@@ -44,10 +44,11 @@ def fetch_mihome_data():
 
 
 class Trv(MIHO013):
-    def __init__(self, name, mqtt_client, device_id, mihome_id, air_interface=None):
+    def __init__(self, name, mqtt_client, device_id, mihome_id, target_offset=0, air_interface=None):
         self.name = name
         self.mihome_id = mihome_id
         self.mqtt_client = mqtt_client
+        self.target_offset = target_offset
 
         MIHO013.__init__(self, device_id, air_interface)
         self.voltageReadingPeriod = None
@@ -61,7 +62,7 @@ class Trv(MIHO013):
     def get_target_temperature(self):
         global mihome_data
         my_data = next(d for d in mihome_data if d["id"] == self.mihome_id)
-        return my_data["target_temperature"]
+        return float(my_data["target_temperature"]) + self.target_offset
 
     def handle_message(self, payload):
         result = super(Trv, self).handle_message(payload)
@@ -150,16 +151,18 @@ def create_handler(trv):
 energenie.init()
 client = EnergenieClient()
 
-spare_room_valve = Trv("spare_room", client, 8220, 183451)
-nursery_valve = Trv("nursery", client, 7746, 183449)
+spare_room_valve = Trv("spare_room", client, 8220, 183451, 1)
+nursery_valve = Trv("nursery", client, 7746, 183449, 2)
 living_room_1_valve = Trv("living_room_1", client, 8614, 190208)
 living_room_2_valve = Trv("living_room_2", client, 7694, 190226)
 bathroom_valve = Trv("bathroom", client, 7809536, 190529)
+master_bedroom_valve = Trv("master_bedroom", client, 10496256, 190538)
+hallway_valve = Trv("hallway", client, 10627584, 190566)
 
-all_trvs = [spare_room_valve, nursery_valve, living_room_1_valve, living_room_2_valve, bathroom_valve]
+all_trvs = [spare_room_valve, nursery_valve, living_room_1_valve, living_room_2_valve, bathroom_valve, master_bedroom_valve, hallway_valve]
 
 handlers = reduce(
-    lambda obj, item: dict(obj.items() + { item.name : create_handler(item) }.items()),
+    lambda obj, item: { **obj, item.name : create_handler(item) },
     all_trvs, {"energenie": handle_energenie, "nest": handle_nest})
 
 
