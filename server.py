@@ -32,22 +32,26 @@ mihome_token = os.environ['MIHOME_TOKEN']
 def fetch_mihome_data():
     logger.info("Fetching data from mihome gateway")
     mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/list"
-    response = requests.get(mihome_url, auth=HTTPBasicAuth(mihome_user, mihome_token))
-    json_data = response.json()
 
-    global mihome_data, mihome_reference
-    mihome_data = json_data["data"]
+    try:
+        response = requests.get(mihome_url, auth=HTTPBasicAuth(mihome_user, mihome_token))
+        json_data = response.json()
 
-    for trv in all_trvs:
-        mihome_reference[trv.name] = mihome_reference.get(trv.name, trv.get_mihome_temperature())
+        global mihome_data, mihome_reference
+        mihome_data = json_data["data"]
 
-        if mihome_reference[trv.name] != trv.get_mihome_temperature():
-            mihome_reference[trv.name] = trv.get_mihome_temperature()
-            logger.info("Target temperature for " + trv.name + " has changed to " + str(trv.get_target_temperature()))
+        for trv in all_trvs:
+            mihome_reference[trv.name] = mihome_reference.get(trv.name, trv.get_mihome_temperature())
 
-        trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
+            if mihome_reference[trv.name] != trv.get_mihome_temperature():
+                mihome_reference[trv.name] = trv.get_mihome_temperature()
+                logger.info("Target temperature for " + trv.name + " has changed to " + str(trv.get_target_temperature()))
 
-    update_call_for_heat()
+            trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
+
+        update_call_for_heat()
+    except Exception as e:
+        logger.error("Error fetching mihome data: " + str(e))
 
 
 class Trv(MIHO013):
