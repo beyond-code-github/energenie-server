@@ -23,6 +23,7 @@ logger.addHandler(ch)
 
 nest_temperature = None
 mihome_data = None
+mihome_reference = {}
 
 mihome_user = os.environ['MIHOME_USER']
 mihome_token = os.environ['MIHOME_TOKEN']
@@ -34,10 +35,15 @@ def fetch_mihome_data():
     response = requests.get(mihome_url, auth=HTTPBasicAuth(mihome_user, mihome_token))
     json_data = response.json()
 
-    global mihome_data
+    global mihome_data, mihome_reference
     mihome_data = json_data["data"]
 
     for trv in all_trvs:
+        mihome_reference[trv.name] = mihome_reference.get(trv.name, trv.get_target_temperature())
+
+        if mihome_reference[trv.name] != trv.get_target_temperature():
+            logger.info("Target temperature for " + trv.name + " has changed to " + trv.get_target_temperature())
+
         trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
 
     update_call_for_heat()
@@ -129,6 +135,8 @@ def handle_nest(payload, path):
 
 def create_handler(trv):
     def handle_trv(payload, path):
+        global mihome_reference
+
         logger.info("Setting " + trv.name + " to " + payload)
 
         mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/set_target_temperature"
@@ -143,6 +151,7 @@ def create_handler(trv):
         logger.debug("Mihome response: " + response.status_code)
         logger.debug(response.text)
 
+        mihome_reference[trv.name] = payload
         fetch_mihome_data()
 
     return handle_trv
