@@ -44,8 +44,7 @@ def fetch_mihome_data():
             reference_temperature = mihome_reference.get(trv.name)
 
             if not reference_temperature:
-                logger.info(trv.name + " received initial mihome data. Target will be updated once the first reading comes through")
-                mihome_reference[trv.name] = trv.get_mihome_temperature()
+                logger.info(trv.name + " has no reference point yet. Target will be updated once the first reading comes through")
             else:
                 if reference_temperature != trv.get_mihome_temperature():
                     mihome_reference[trv.name] = trv.get_mihome_temperature()
@@ -93,8 +92,9 @@ class Trv(MIHO013):
     def update_state(self):
         state = "Off"
         reference_temp = mihome_reference[self.name]
+        initialised = self.get_target_temperature() > 0 and self.get_ambient_temperature() is not None
 
-        if self.get_target_temperature() > 0 and self.get_ambient_temperature() is not None:
+        if initialised:
             if self.is_calling_for_heat():
                 state = "Heat"
                 if reference_temp != self.get_target_temperature():
@@ -112,20 +112,25 @@ class Trv(MIHO013):
 
     def handle_message(self, payload):
         previous_reading = self.get_ambient_temperature()
-
         result = super(Trv, self).handle_message(payload)
-        self.mqtt_client.publish("home/" + self.name + "/trv/current", str(self.get_ambient_temperature()), retain=True)
-        logger.info(self.name + " reports temperature " + str(self.get_ambient_temperature()))
+        current_reading = self.get_ambient_temperature()
 
-        if self.get_ambient_temperature() and not previous_reading:
-            if self.get_ambient_temperature() > self.get_mihome_temperature():
+        self.mqtt_client.publish("home/" + self.name + "/trv/current", str(current_reading), retain=True)
+        logger.info(self.name + " reports temperature " + str(current_reading))
+
+        if current_reading and not previous_reading:
+            mihome_temperature = self.get_mihome_temperature()
+            mihome_reference[self.name] = mihome_temperature
+
+            if current_reading > mihome_temperature:
                 logger.info(self.name + " first reading is above mihome target, assuming trv is on adjusted value")
-                self.set_target_temperature(mihome_reference[self.name] + 1)
+                self.set_target_temperature(mihome_temperature + 1)
             else:
                 logger.info(self.name + " first reading is below mihome target, assuming trv is on actual value")
-                self.set_target_temperature(mihome_reference[self.name])
+                self.set_target_temperature(mihome_temperature)
 
-        update_call_for_heat()
+        if current_reading != previous_reading:
+            update_call_for_heat()
 
         return result
 
