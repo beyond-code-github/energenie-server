@@ -181,7 +181,7 @@ def set_trv_temperature(trv, temperature):
             data={"params": json_data},
             auth=HTTPBasicAuth(mihome_user, mihome_token))
 
-        logger.debug("Mihome response: " + response.status_code)
+        logger.debug("Mihome response: " + str(response.status_code))
         logger.debug(response.text)
     except Exception as e:
         logger.error("Error setting trv temperature: " + str(e))
