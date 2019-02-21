@@ -48,8 +48,8 @@ def fetch_mihome_data():
             else:
                 if reference_temperature != trv.get_mihome_temperature():
                     mihome_reference[trv.name] = trv.get_mihome_temperature()
-                    logger.info("Target temperature for " + trv.name + " has changed to " + str(mihome_reference[trv.name]))
-                    trv.set_target_temperature(mihome_reference[trv.name])
+                    trv.set_target_temperature_from_mihome(mihome_reference[trv.name])
+                    logger.info("Target temperature for " + trv.name + " has changed to " + str(trv.get_target_temperature()))
 
                 trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
 
@@ -78,13 +78,19 @@ class Trv(MIHO013):
     def get_mihome_temperature(self):
         global mihome_data
         my_data = next(d for d in mihome_data if d["id"] == self.mihome_id)
-        return float(my_data["target_temperature"]) + self.target_offset
+        return float(my_data["target_temperature"])
 
     def get_target_temperature(self):
         return self.target_temperature
 
+    def get_target_temperature_for_mihome(self):
+        return self.target_temperature - self.target_offset
+
     def set_target_temperature(self, target):
         self.target_temperature = target
+
+    def set_target_temperature_from_mihome(self, target):
+        self.target_temperature = target + self.target_offset
 
     def is_calling_for_heat(self):
         return (self.get_ambient_temperature() or 99) < self.get_target_temperature()
@@ -98,12 +104,13 @@ class Trv(MIHO013):
 
             if self.is_calling_for_heat():
                 state = "Heat"
-                if reference_temp != self.get_target_temperature():
+                if reference_temp != self.get_target_temperature_for_mihome():
                     logger.info(self.name + " is calling for heat, setting mihome to actual target temperature")
-                    mihome_reference[self.name] = self.get_target_temperature()
-                    set_trv_temperature(self, self.get_target_temperature())
+                    mihome_temperature = self.get_target_temperature_for_mihome()
+                    mihome_reference[self.name] = mihome_temperature
+                    set_trv_temperature(self, mihome_temperature)
             else:
-                adjusted_temp = self.get_target_temperature() - 1 - self.target_offset
+                adjusted_temp = self.get_target_temperature_for_mihome() - 1
                 if adjusted_temp != reference_temp:
                     logger.info(self.name + " is no longer calling for heat, dropping mihome target temperature to" + str(adjusted_temp))
                     mihome_reference[self.name] = adjusted_temp
@@ -125,10 +132,10 @@ class Trv(MIHO013):
 
             if current_reading > mihome_temperature:
                 logger.info(self.name + " first reading is above mihome target, assuming trv is on adjusted value")
-                self.set_target_temperature(mihome_temperature + 1)
+                self.set_target_temperature_from_mihome(mihome_temperature + 1)
             else:
                 logger.info(self.name + " first reading is below mihome target, assuming trv is on actual value")
-                self.set_target_temperature(mihome_temperature)
+                self.set_target_temperature_from_mihome(mihome_temperature)
 
         if current_reading != previous_reading:
             update_call_for_heat()
