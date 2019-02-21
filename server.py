@@ -91,10 +91,11 @@ class Trv(MIHO013):
 
     def update_state(self):
         state = "Off"
-        reference_temp = mihome_reference[self.name]
         initialised = self.get_target_temperature() > 0 and self.get_ambient_temperature() is not None
 
         if initialised:
+            reference_temp = mihome_reference[self.name]
+
             if self.is_calling_for_heat():
                 state = "Heat"
                 if reference_temp != self.get_target_temperature():
