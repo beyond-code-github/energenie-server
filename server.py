@@ -90,25 +90,32 @@ class Trv(MIHO013):
         state = "Off"
         reference_temp = mihome_reference[self.name]
 
-        if self.is_calling_for_heat():
-            state = "Heat"
-            if reference_temp != self.get_target_temperature():
-                logger.info(self.name + " has started calling for heat, setting mihome to actual target temperature")
-                mihome_reference[self.name] = self.get_target_temperature()
-                set_trv_temperature(self, self.get_target_temperature())
-        else:
-            adjusted_temp = self.get_target_temperature() - 1
-            if adjusted_temp != reference_temp:
-                logger.info(self.name + " has finished calling for heat, dropping mihome target temperature to" + str(adjusted_temp))
-                mihome_reference[self.name] = adjusted_temp
-                set_trv_temperature(self, adjusted_temp)
+        if self.get_target_temperature() > 0 and self.get_ambient_temperature() is not None:
+            if self.is_calling_for_heat():
+                state = "Heat"
+                if reference_temp != self.get_target_temperature():
+                    logger.info(self.name + " is calling for heat, setting mihome to actual target temperature")
+                    mihome_reference[self.name] = self.get_target_temperature()
+                    set_trv_temperature(self, self.get_target_temperature())
+            else:
+                adjusted_temp = self.get_target_temperature() - 1 - self.target_offset
+                if adjusted_temp != reference_temp:
+                    logger.info(self.name + " is no longer calling for heat, dropping mihome target temperature to" + str(adjusted_temp))
+                    mihome_reference[self.name] = adjusted_temp
+                    set_trv_temperature(self, adjusted_temp)
 
         self.mqtt_client.publish("home/" + self.name + "/trv/state", state, retain=True)
 
     def handle_message(self, payload):
+        previous_reading = self.get_ambient_temperature()
+
         result = super(Trv, self).handle_message(payload)
         self.mqtt_client.publish("home/" + self.name + "/trv/current", str(self.get_ambient_temperature()), retain=True)
         logger.info(self.name + " reports temperature " + str(self.get_ambient_temperature()))
+
+        if not previous_reading and self.get_ambient_temperature() > self.get_target_temperature():
+            logger.info(self.name + " first reading is above target, assuming mihome is on adjusted value")
+            self.set_target_temperature(mihome_reference[self.name] + 1)
 
         update_call_for_heat()
 
