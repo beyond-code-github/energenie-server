@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import atexit
 from functools import reduce
@@ -84,7 +85,7 @@ class Trv(MIHO013):
         return self.target_temperature
 
     def get_target_temperature_for_mihome(self):
-        return self.target_temperature - self.target_offset
+        return math.floor(self.target_temperature - self.target_offset)
 
     def set_target_temperature(self, target):
         self.target_temperature = target
@@ -104,15 +105,15 @@ class Trv(MIHO013):
 
             if self.is_calling_for_heat():
                 state = "Heat"
-                if reference_temp != self.get_target_temperature_for_mihome():
-                    logger.info(self.name + " is calling for heat, setting mihome to actual target temperature")
-                    mihome_temperature = self.get_target_temperature_for_mihome()
-                    mihome_reference[self.name] = mihome_temperature
-                    set_trv_temperature(self, mihome_temperature)
+                adjusted_temp = self.get_target_temperature_for_mihome() + 1
+                if adjusted_temp != reference_temp:
+                    logger.info(self.name + " is calling for heat, setting mihome target temperature to " + str(adjusted_temp) + "(+1)")
+                    mihome_reference[self.name] = adjusted_temp
+                    set_trv_temperature(self, adjusted_temp)
             else:
                 adjusted_temp = self.get_target_temperature_for_mihome() - 1
                 if adjusted_temp != reference_temp:
-                    logger.info(self.name + " is no longer calling for heat, dropping mihome target temperature to" + str(adjusted_temp))
+                    logger.info(self.name + " is not calling for heat, dropping mihome target temperature to " + str(adjusted_temp) + "(-1)")
                     mihome_reference[self.name] = adjusted_temp
                     set_trv_temperature(self, adjusted_temp)
 
@@ -131,11 +132,11 @@ class Trv(MIHO013):
             mihome_reference[self.name] = mihome_temperature
 
             if current_reading > mihome_temperature:
-                logger.info(self.name + " first reading is above mihome target, assuming trv is on adjusted value")
+                logger.info(self.name + " first reading is above mihome target, assuming trv is adjusted down")
                 self.set_target_temperature_from_mihome(mihome_temperature + 1)
             else:
-                logger.info(self.name + " first reading is below mihome target, assuming trv is on actual value")
-                self.set_target_temperature_from_mihome(mihome_temperature)
+                logger.info(self.name + " first reading is below mihome target, assuming trv is adjusted up")
+                self.set_target_temperature_from_mihome(mihome_temperature - 1)
 
         if current_reading != previous_reading:
             update_call_for_heat()
@@ -218,7 +219,29 @@ def set_trv_temperature(trv, temperature):
 def create_handler(trv):
     def handle_trv(payload, path):
         logger.info("Handling set " + trv.name + " to " + payload)
-        set_trv_temperature(trv, payload)
+
+        # We could receive a payload of 18, but mihome temp could already be 18
+        # In this case, we would actually set mihome to 17 or 19 depending on current reading
+        # We could also get a fractional value which mihome would not accept, so this would be the only way to make it
+        # stick
+        trv.set_target_temperature(payload)
+        current_reading = trv.get_ambient_temperature()
+
+        if current_reading > payload:
+            adjusted_temp = trv.get_target_temperature_for_mihome() - 1
+            logger.info(trv.name + " current temperature is above new target, setting mihome temp to " + str(adjusted_temp) + "(-1)")
+
+            # set mihome reference ahead of time so that we don't adjust it when data comes in
+            mihome_reference[trv.name] = adjusted_temp
+            set_trv_temperature(trv, adjusted_temp)
+        else:
+            adjusted_temp = trv.get_target_temperature_for_mihome() + 1
+            logger.info(trv.name + " current temperature is below new target, setting mihome temp to " + str(adjusted_temp) + "(+1)")
+
+            # set mihome reference ahead of time so that we don't adjust it when data comes in
+            mihome_reference[trv.name] = adjusted_temp
+            set_trv_temperature(trv, adjusted_temp)
+
         fetch_mihome_data()
 
     return handle_trv
