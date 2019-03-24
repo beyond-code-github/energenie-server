@@ -224,10 +224,11 @@ def create_handler(trv):
         # In this case, we would actually set mihome to 17 or 19 depending on current reading
         # We could also get a fractional value which mihome would not accept, so this would be the only way to make it
         # stick
-        trv.set_target_temperature(payload)
+        target = float(payload)
+        trv.set_target_temperature(target)
         current_reading = trv.get_ambient_temperature()
 
-        if current_reading > payload:
+        if current_reading > target:
             adjusted_temp = trv.get_target_temperature_for_mihome() - 1
             logger.info(trv.name + " current temperature is above new target, setting mihome temp to " + str(adjusted_temp) + "(-1)")
 
