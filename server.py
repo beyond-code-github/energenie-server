@@ -1,7 +1,7 @@
-import json
+import atexit
+import logging
 import math
 import os
-import atexit
 from functools import reduce
 
 import energenie
@@ -11,7 +11,6 @@ from energenie.Devices import MIHO013
 from requests.auth import HTTPBasicAuth
 
 from energenie_client import EnergenieClient
-import logging
 
 # create logger
 ch = logging.StreamHandler()
@@ -20,7 +19,6 @@ ch.setLevel(logging.INFO)
 logger = logging.getLogger("energenie.server")
 logger.setLevel(logging.INFO)
 logger.addHandler(ch)
-
 
 nest_temperature = None
 mihome_data = None
@@ -45,14 +43,17 @@ def fetch_mihome_data():
             reference_temperature = mihome_reference.get(trv.name)
 
             if not reference_temperature:
-                logger.info(trv.name + " has no reference point yet. Target will be updated once the first reading comes through")
+                logger.info(
+                    trv.name + " has no reference point yet. Target will be updated once the first reading comes through")
             else:
                 if reference_temperature != trv.get_mihome_temperature():
                     mihome_reference[trv.name] = trv.get_mihome_temperature()
                     trv.set_target_temperature_from_mihome(mihome_reference[trv.name])
-                    logger.info("Target temperature for " + trv.name + " has changed to " + str(trv.get_target_temperature()))
+                    logger.info(
+                        "Target temperature for " + trv.name + " has changed to " + str(trv.get_target_temperature()))
 
-                trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()), retain=True)
+                trv.mqtt_client.publish("home/" + trv.name + "/trv/target", str(trv.get_target_temperature()),
+                                        retain=True)
 
         update_call_for_heat()
     except Exception as e:
@@ -74,7 +75,8 @@ class Trv(MIHO013):
         energenie.fsk_router.add((4, 3, device_id), self)
 
     def description(self):
-        return self.name + " (" + str(self.get_ambient_temperature() or 99) + "/" + str(self.get_target_temperature()) + ")"
+        return self.name + " (" + str(self.get_ambient_temperature() or 99) + "/" + str(
+            self.get_target_temperature()) + ")"
 
     def get_mihome_temperature(self):
         global mihome_data
@@ -107,13 +109,15 @@ class Trv(MIHO013):
                 state = "Heat"
                 adjusted_temp = self.get_target_temperature_for_mihome() + 1
                 if adjusted_temp != reference_temp:
-                    logger.info(self.name + " is calling for heat, setting mihome target temperature to " + str(adjusted_temp) + "(+1)")
+                    logger.info(self.name + " is calling for heat, setting mihome target temperature to " + str(
+                        adjusted_temp) + "(+1)")
                     mihome_reference[self.name] = adjusted_temp
                     set_trv_temperature(self, adjusted_temp)
             else:
                 adjusted_temp = self.get_target_temperature_for_mihome() - 1
                 if adjusted_temp != reference_temp:
-                    logger.info(self.name + " is not calling for heat, dropping mihome target temperature to " + str(adjusted_temp) + "(-1)")
+                    logger.info(self.name + " is not calling for heat, dropping mihome target temperature to " + str(
+                        adjusted_temp) + "(-1)")
                     mihome_reference[self.name] = adjusted_temp
                     set_trv_temperature(self, adjusted_temp)
 
@@ -199,6 +203,74 @@ def handle_nest(payload, path):
     update_call_for_heat()
 
 
+def biglight_on(device_id):
+    mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/power_on"
+    json_data = "{\"id\":" + str(device_id) + "}"
+    logger.debug(json_data)
+
+    try:
+        response = requests.post(
+            mihome_url,
+            data={"params": json_data},
+            auth=HTTPBasicAuth(mihome_user, mihome_token))
+
+        logger.debug("Mihome response: " + str(response.status_code))
+        logger.debug(response.text)
+    except Exception as e:
+        logger.error("Error turning big light on: " + str(e))
+
+
+def biglight_off(device_id):
+    mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/power_off"
+    json_data = "{\"id\":" + str(device_id) + "}"
+    logger.debug(json_data)
+
+    try:
+        response = requests.post(
+            mihome_url,
+            data={"params": json_data},
+            auth=HTTPBasicAuth(mihome_user, mihome_token))
+
+        logger.debug("Mihome response: " + str(response.status_code))
+        logger.debug(response.text)
+    except Exception as e:
+        logger.error("Error turning big light off: " + str(e))
+
+
+def biglight_brightness(device_id, level):
+    mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/set_dimmer_level"
+    json_data = "{\"id\":" + str(device_id) + ", \"level\": " + str(level) + "}"
+    logger.debug(json_data)
+
+    try:
+        response = requests.post(
+            mihome_url,
+            data={"params": json_data},
+            auth=HTTPBasicAuth(mihome_user, mihome_token))
+
+        logger.debug("Mihome response: " + str(response.status_code))
+        logger.debug(response.text)
+    except Exception as e:
+        logger.error("Error turning big light off: " + str(e))
+
+
+def handle_biglight(payload, path):
+    device_id = int(path[2])
+    command = (path[3])
+
+    if command == "switch":
+        if payload == "ON":
+            logger.info("Turning big light on")
+            biglight_on(device_id)
+        else:
+            logger.info("Turning big light off")
+            biglight_off(device_id)
+
+    if command == "brightness":
+        logger.info("Setting big light brightness to " + str(payload))
+        biglight_brightness(device_id, payload)
+
+
 def set_trv_temperature(trv, temperature):
     mihome_url = "https://mihome4u.co.uk/api/v1/subdevices/set_target_temperature"
     json_data = "{\"id\":" + str(trv.mihome_id) + ", \"temperature\": " + str(temperature) + "}"
@@ -230,14 +302,16 @@ def create_handler(trv):
 
         if current_reading > target:
             adjusted_temp = trv.get_target_temperature_for_mihome() - 1
-            logger.info(trv.name + " current temperature is above new target, setting mihome temp to " + str(adjusted_temp) + "(-1)")
+            logger.info(trv.name + " current temperature is above new target, setting mihome temp to " + str(
+                adjusted_temp) + "(-1)")
 
             # set mihome reference ahead of time so that we don't adjust it when data comes in
             mihome_reference[trv.name] = adjusted_temp
             set_trv_temperature(trv, adjusted_temp)
         else:
             adjusted_temp = trv.get_target_temperature_for_mihome() + 1
-            logger.info(trv.name + " current temperature is below new target, setting mihome temp to " + str(adjusted_temp) + "(+1)")
+            logger.info(trv.name + " current temperature is below new target, setting mihome temp to " + str(
+                adjusted_temp) + "(+1)")
 
             # set mihome reference ahead of time so that we don't adjust it when data comes in
             mihome_reference[trv.name] = adjusted_temp
@@ -259,11 +333,17 @@ bathroom_valve = Trv("bathroom", client, 7809536, 190529)
 master_bedroom_valve = Trv("master_bedroom", client, 10496256, 190538)
 hallway_valve = Trv("hallway", client, 10627584, 190566)
 
-all_trvs = [spare_room_valve, nursery_valve, living_room_1_valve, living_room_2_valve, bathroom_valve, master_bedroom_valve, hallway_valve]
+all_trvs = [spare_room_valve, nursery_valve, living_room_1_valve, living_room_2_valve, bathroom_valve,
+            master_bedroom_valve, hallway_valve]
 
 handlers = reduce(
-    lambda obj, item: { **obj, item.name : create_handler(item) },
-    all_trvs, {"energenie": handle_energenie, "nest": handle_nest})
+    lambda obj, item: {**obj, item.name: create_handler(item)},
+    all_trvs,
+    {
+        "energenie": handle_energenie,
+        "nest": handle_nest,
+        "biglight": handle_biglight
+    })
 
 
 # The callback for when a PUBLISH message is received from the server.
